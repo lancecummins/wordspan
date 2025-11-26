@@ -64,8 +64,8 @@ function App() {
   });
   const [blanks, setBlanks] = useState(Array(BLANK_COUNT).fill(null));
   const [rowDeleteCount, setRowDeleteCount] = useState(0);
-  const [spinCount, setSpinCount] = useState(0);
-  const [spinsRemaining, setSpinsRemaining] = useState(5);
+  const [shiftCount, setShiftCount] = useState(0);
+  const [shiftsRemaining, setShiftsRemaining] = useState(5);
   const [deletesRemaining, setDeletesRemaining] = useState(3);
   const [gameOver, setGameOver] = useState(false);
   const [message, setMessage] = useState('');
@@ -75,12 +75,11 @@ function App() {
   const [showPossibleWordsModal, setShowPossibleWordsModal] = useState(false);
   const [complexity, setComplexity] = useState(0);
   const [initialPossibleWords, setInitialPossibleWords] = useState(null);
+  const [score, setScore] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
 
-  // Check if any valid moves remain (when spins = 0)
+  // Check if any valid moves remain (when shifts = 0)
   const checkIfAnyValidMovesRemain = () => {
-    // Get bottom row
-    const bottomRow = grid[GRID_ROWS - 1];
-
     // Find empty blank positions
     const emptyBlankIndices = blanks
       .map((letter, index) => letter === null ? index : null)
@@ -89,15 +88,15 @@ function App() {
     // If no empty blanks, we can't make any moves
     if (emptyBlankIndices.length === 0) return false;
 
-    // Check each column in bottom row
-    for (let colIndex = 0; colIndex < bottomRow.length; colIndex++) {
-      const letter = bottomRow[colIndex];
+    // For each empty blank position
+    for (let blankIndex of emptyBlankIndices) {
+      // Check the column above this blank position (all rows in this column)
+      for (let rowIndex = 0; rowIndex < GRID_ROWS; rowIndex++) {
+        const letter = grid[rowIndex][blankIndex];
 
-      // Skip if no letter in this column
-      if (!letter) continue;
+        // Skip if no letter in this position
+        if (!letter) continue;
 
-      // Try dropping this letter into each empty blank
-      for (let blankIndex of emptyBlankIndices) {
         // Create a test blanks array with this letter dropped
         const testBlanks = [...blanks];
         testBlanks[blankIndex] = letter;
@@ -210,22 +209,16 @@ function App() {
         setComplexity(complexityRating);
       }
 
-      // Check if game over when spins run out
-      if (spinsRemaining === 0 && blanks.some(b => b === null)) {
+      // Check if game over only when BOTH shifts AND deletes are exhausted
+      if (shiftsRemaining === 0 && deletesRemaining === 0 && blanks.some(b => b === null)) {
         const hasValidMoves = checkIfAnyValidMovesRemain();
         if (!hasValidMoves) {
           setGameOver(true);
           setMessage('No valid moves remaining. Game over');
         }
       }
-
-      // End game if no words possible
-      if (result.count === 0) {
-        setGameOver(true);
-        setMessage('There are no words possible. Game over');
-      }
     }
-  }, [grid, blanks, spinsRemaining, deletesRemaining, gameOver, initialPossibleWords]);
+  }, [grid, blanks, shiftsRemaining, deletesRemaining, gameOver, initialPossibleWords]);
 
 
   // Handle letter drop from bottom row
@@ -270,6 +263,12 @@ function App() {
 
       if (isValid) {
         setCompletedWord(wordString.toUpperCase());
+
+        // Calculate score: 10 points per remaining delete, 10 points per remaining shift,
+        // plus complexity percentage as points
+        const calculatedScore = (deletesRemaining * 10) + (shiftsRemaining * 10) + Math.round(complexity * 100);
+        setScore(calculatedScore);
+
         setGameOver(true);
       } else {
         setMessage(`"${wordString.toUpperCase()}" is not a valid word. Try again!`);
@@ -294,9 +293,9 @@ function App() {
     setDeletesRemaining(prev => prev - 1);
   };
 
-  // Handle row spin (rotate letters to the right)
-  const handleRowSpin = (rowIndex) => {
-    if (spinsRemaining <= 0) return;
+  // Handle row shift (rotate letters to the right)
+  const handleRowShift = (rowIndex) => {
+    if (shiftsRemaining <= 0) return;
 
     const newGrid = grid.map(row => [...row]);
     const row = newGrid[rowIndex];
@@ -329,8 +328,8 @@ function App() {
 
     newGrid[rowIndex] = row;
     setGrid(newGrid);
-    setSpinCount(prev => prev + 1);
-    setSpinsRemaining(prev => prev - 1);
+    setShiftCount(prev => prev + 1);
+    setShiftsRemaining(prev => prev - 1);
   };
 
   // Play again - restart the game
@@ -345,14 +344,15 @@ function App() {
     setGrid(newGrid);
     setBlanks(Array(BLANK_COUNT).fill(null));
     setRowDeleteCount(0);
-    setSpinCount(0);
-    setSpinsRemaining(5);
+    setShiftCount(0);
+    setShiftsRemaining(5);
     setDeletesRemaining(3);
     setGameOver(false);
     setMessage('');
     setCompletedWord('');
     setInitialPossibleWords(null);
     setComplexity(0);
+    setScore(0);
   };
 
   return (
@@ -361,7 +361,21 @@ function App() {
         <div className="header">
           <h1>WordDrop</h1>
           <div className="stats">
-            <button className="back-btn" onClick={playAgain}>Play Again</button>
+            <div className="menu-container">
+              <button className="menu-btn" onClick={() => setShowMenu(!showMenu)}>
+                ☰
+              </button>
+              {showMenu && (
+                <div className="menu-dropdown">
+                  <button className="menu-item" onClick={() => { playAgain(); setShowMenu(false); }}>
+                    Play Again
+                  </button>
+                  <button className="menu-item" onClick={() => { setShowPossibleWordsModal(true); setShowMenu(false); }}>
+                    See {possibleWordsCount} Possible {possibleWordsCount === 1 ? 'Word' : 'Words'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -401,18 +415,18 @@ function App() {
               {rowIndex === GRID_ROWS - 1 ? (
                 <div className="action-btn-container">
                   <button
-                    className="spin-row-btn"
-                    onClick={() => handleRowSpin(rowIndex)}
-                    disabled={gameOver || spinsRemaining <= 0}
-                    title="Rotate row"
+                    className="shift-row-btn"
+                    onClick={() => handleRowShift(rowIndex)}
+                    disabled={gameOver || shiftsRemaining <= 0}
+                    title="Shift row right"
                   >
-                    ↻
+                    →
                   </button>
-                  <div className="action-count">{spinsRemaining}</div>
+                  <div className="action-count">{shiftsRemaining}</div>
                 </div>
               ) : (
                 <div className="action-btn-container">
-                  <div className="spin-row-btn" style={{ visibility: 'hidden' }}></div>
+                  <div className="shift-row-btn" style={{ visibility: 'hidden' }}></div>
                   <div className="action-count" style={{ visibility: 'hidden' }}>0</div>
                 </div>
               )}
@@ -428,14 +442,49 @@ function App() {
           ))}
         </div>
 
-        {!gameOver && (
-          <div className="possible-words-section">
-            <button
-              className="possible-words-count"
-              onClick={() => setShowPossibleWordsModal(true)}
-            >
-              {possibleWordsCount} possible {possibleWordsCount === 1 ? 'word' : 'words'}
+        {gameOver && (
+          <div className={`game-over-toast ${completedWord ? 'success' : 'failure'}`}>
+            {completedWord ? (
+              <>
+                <div className="toast-header">🎉 You Won!</div>
+                <div className="toast-score-breakdown">
+                  <div className="score-line">
+                    <span>Complexity:</span>
+                    <span>{Math.round(complexity * 100)} pts</span>
+                  </div>
+                  <div className="score-line">
+                    <span>Delete Bonus ({deletesRemaining}):</span>
+                    <span>{deletesRemaining * 10} pts</span>
+                  </div>
+                  <div className="score-line">
+                    <span>Shift Bonus ({shiftsRemaining}):</span>
+                    <span>{shiftsRemaining * 10} pts</span>
+                  </div>
+                  <div className="score-total">
+                    <span>Total Score:</span>
+                    <span>{score}</span>
+                  </div>
+                </div>
+                <div className="toast-stats">
+                  <span>Deletes Used: {rowDeleteCount}</span>
+                  <span>•</span>
+                  <span>Shifts Used: {shiftCount}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="toast-header">Game Over</div>
+                <div className="toast-message">{message}</div>
+              </>
+            )}
+            <button onClick={playAgain} className="toast-play-again-btn">
+              Play Again
             </button>
+          </div>
+        )}
+
+        {!gameOver && (
+          <div className="game-info-section">
             <div className="complexity-rating">
               <span className="complexity-label">Complexity:</span>
               <div className="complexity-bar-container">
@@ -446,35 +495,27 @@ function App() {
               </div>
               <span className="complexity-percentage">{Math.round(complexity * 100)}%</span>
             </div>
-          </div>
-        )}
-
-        {gameOver && (
-          <div className="game-over">
-            {completedWord ? (
-              <>
-                <h2 className="celebration">Congratulations!</h2>
-                <div className="completed-word">{completedWord}</div>
-                <div className="stats-summary">
-                  <div className="stat-item">
-                    <span className="stat-label">Row Deletes:</span>
-                    <span className="stat-value">{rowDeleteCount}</span>
-                  </div>
-                  <div className="stat-item">
-                    <span className="stat-label">Spins:</span>
-                    <span className="stat-value">{spinCount}</span>
-                  </div>
+            <div className="live-score-display">
+              <div className="live-score-header">Potential Score</div>
+              <div className="live-score-breakdown">
+                <div className="live-score-line">
+                  <span>Complexity:</span>
+                  <span>{Math.round(complexity * 100)} pts</span>
                 </div>
-              </>
-            ) : (
-              <>
-                <h2>Game Over</h2>
-                <p>{message}</p>
-              </>
-            )}
-            <button onClick={playAgain} className="play-again-btn">
-              Play Again?
-            </button>
+                <div className="live-score-line">
+                  <span>Delete Bonus:</span>
+                  <span>{deletesRemaining * 10} pts</span>
+                </div>
+                <div className="live-score-line">
+                  <span>Shift Bonus:</span>
+                  <span>{shiftsRemaining * 10} pts</span>
+                </div>
+                <div className="live-score-total">
+                  <span>Total:</span>
+                  <span>{(deletesRemaining * 10) + (shiftsRemaining * 10) + Math.round(complexity * 100)}</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
