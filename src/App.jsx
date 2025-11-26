@@ -294,7 +294,7 @@ function App() {
     <div className="app">
       <div className="game-container">
         <div className="header">
-          <h1>WordSpan</h1>
+          <h1>WordDrop</h1>
           <div className="stats">
             <button className="back-btn" onClick={playAgain}>Play Again</button>
           </div>

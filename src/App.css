@@ -210,13 +210,13 @@
 }
 
 .spin-row-btn {
-  width: 60px;
-  height: 60px;
+  width: 40px;
+  height: 40px;
   background: #2ecc71;
   border: none;
   border-radius: 50%;
   color: white;
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: bold;
   cursor: pointer;
   display: flex;
@@ -296,7 +296,7 @@
   align-items: center;
   gap: 5px;
   margin: 0 10px;
-  min-width: 60px;
+  min-width: 40px;
 }
 
 .action-count {
@@ -537,12 +537,7 @@
   }
 
   .spin-row-btn,
-  .delete-row-btn {
-    width: 45px;
-    height: 45px;
-    font-size: 1.3rem;
-  }
-
+  .delete-row-btn,
   .delete-row-btn-simple {
     width: 30px;
     height: 30px;
@@ -551,7 +546,7 @@
 
   .action-btn-container {
     margin: 0 5px;
-    min-width: 45px;
+    min-width: 30px;
   }
 
   .action-count {
