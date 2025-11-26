@@ -517,33 +517,68 @@
 /* Responsive design */
 @media (max-width: 600px) {
   .game-container {
-    padding: 20px;
+    padding: 15px;
+    max-width: 100%;
   }
 
   .letter-cell,
   .blank-cell {
-    width: 50px;
-    height: 50px;
-    font-size: 1.5rem;
+    width: 45px;
+    height: 45px;
+    font-size: 1.3rem;
+  }
+
+  .grid-row {
+    gap: 5px;
+  }
+
+  .blanks-container {
+    gap: 5px;
   }
 
   .spin-row-btn,
   .delete-row-btn {
-    width: 50px;
-    height: 50px;
-    font-size: 1.5rem;
+    width: 45px;
+    height: 45px;
+    font-size: 1.3rem;
+  }
+
+  .delete-row-btn-simple {
+    width: 30px;
+    height: 30px;
+    font-size: 1.2rem;
+  }
+
+  .action-btn-container {
+    margin: 0 5px;
+    min-width: 45px;
+  }
+
+  .action-count {
+    width: 25px;
+    height: 25px;
+    font-size: 0.85rem;
   }
 
   .header h1 {
     font-size: 1.5rem;
   }
 
+  .mode-selection {
+    padding: 30px 20px;
+  }
+
   .mode-selection h1 {
     font-size: 2rem;
   }
 
+  .mode-btn {
+    min-width: 200px;
+    padding: 20px;
+  }
+
   .game-over {
-    min-width: 300px;
+    min-width: 280px;
     padding: 30px 20px;
   }
 
@@ -552,12 +587,22 @@
   }
 
   .completed-word {
-    font-size: 2.5rem;
-    letter-spacing: 4px;
+    font-size: 2rem;
+    letter-spacing: 3px;
   }
 
   .stats-summary {
     flex-direction: column;
     gap: 15px;
+  }
+
+  .possible-words-count {
+    font-size: 1rem;
+    padding: 8px 16px;
+  }
+
+  .possible-word {
+    font-size: 0.8rem;
+    padding: 5px 10px;
   }
 }
