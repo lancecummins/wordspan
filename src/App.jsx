@@ -52,17 +52,152 @@ const checkGridHasWordsStatic = (gridToCheck) => {
   return false;
 };
 
-function App() {
-  const [grid, setGrid] = useState(() => {
-    let newGrid = createGrid();
-    let attempts = 0;
-    while (!checkGridHasWordsStatic(newGrid) && attempts < 100) {
-      newGrid = createGrid();
-      attempts++;
+// Static helper to calculate possible words count (used during initialization)
+const calculatePossibleWordsStatic = (gridToCheck, blanksToCheck) => {
+  const letterCounts = {};
+  for (let row of gridToCheck) {
+    for (let letter of row) {
+      if (letter) {
+        const lowerLetter = letter.toLowerCase();
+        letterCounts[lowerLetter] = (letterCounts[lowerLetter] || 0) + 1;
+      }
     }
-    return newGrid;
-  });
-  const [blanks, setBlanks] = useState(Array(BLANK_COUNT).fill(null));
+  }
+
+  // Subtract letters already used in blanks
+  for (let letter of blanksToCheck) {
+    if (letter) {
+      const lowerLetter = letter.toLowerCase();
+      if (letterCounts[lowerLetter]) {
+        letterCounts[lowerLetter]--;
+        if (letterCounts[lowerLetter] === 0) {
+          delete letterCounts[lowerLetter];
+        }
+      }
+    }
+  }
+
+  const canFormWord = (word) => {
+    // Check if word matches the pattern in blanks
+    for (let i = 0; i < blanksToCheck.length; i++) {
+      if (blanksToCheck[i] !== null) {
+        if (word[i] !== blanksToCheck[i].toLowerCase()) {
+          return false;
+        }
+      }
+    }
+
+    // Check if we have the remaining letters available
+    const neededLetters = {};
+    for (let i = 0; i < word.length; i++) {
+      if (blanksToCheck[i] === null) {
+        const char = word[i];
+        neededLetters[char] = (neededLetters[char] || 0) + 1;
+      }
+    }
+
+    for (let char in neededLetters) {
+      if (!letterCounts[char] || letterCounts[char] < neededLetters[char]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  let count = 0;
+  for (let word of VALID_WORDS) {
+    if (canFormWord(word)) {
+      count++;
+    }
+  }
+  return count;
+};
+
+// Drop a random letter from bottom row into a random blank position
+// For initial drop, keep grid full by generating a new letter
+const dropRandomLetter = (grid, blanks, keepGridFull = false) => {
+  // Find columns in bottom row that have letters
+  const bottomRow = grid[GRID_ROWS - 1];
+  const availableColumns = [];
+  for (let i = 0; i < bottomRow.length; i++) {
+    if (bottomRow[i] !== null) {
+      availableColumns.push(i);
+    }
+  }
+
+  if (availableColumns.length === 0) {
+    return { grid, blanks }; // No letters to drop
+  }
+
+  // Pick random column from available columns
+  const colIndex = availableColumns[Math.floor(Math.random() * availableColumns.length)];
+
+  // Pick random blank position
+  const blankIndex = Math.floor(Math.random() * BLANK_COUNT);
+
+  // Get the letter from bottom row
+  const letter = grid[GRID_ROWS - 1][colIndex];
+
+  // Update blanks
+  const newBlanks = [...blanks];
+  newBlanks[blankIndex] = letter;
+
+  // Update grid
+  const newGrid = grid.map(row => [...row]);
+
+  if (keepGridFull) {
+    // Replace the dropped letter with a new random letter (keep grid full)
+    newGrid[GRID_ROWS - 1][colIndex] = generateLetter();
+  } else {
+    // Shift the column down
+    for (let rowIndex = GRID_ROWS - 1; rowIndex > 0; rowIndex--) {
+      newGrid[rowIndex][colIndex] = newGrid[rowIndex - 1][colIndex];
+    }
+    newGrid[0][colIndex] = null;
+  }
+
+  return { grid: newGrid, blanks: newBlanks };
+};
+
+// Initialize grid and blanks with one random letter dropped
+const initializeGame = () => {
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  while (attempts < maxAttempts) {
+    // Create a new grid
+    let newGrid = createGrid();
+
+    // Make sure grid has some possible words
+    if (!checkGridHasWordsStatic(newGrid)) {
+      attempts++;
+      continue;
+    }
+
+    // Drop a random letter (keep grid full for initial setup)
+    const startingBlanks = Array(BLANK_COUNT).fill(null);
+    const { grid: gridAfterDrop, blanks: blanksAfterDrop } = dropRandomLetter(newGrid, startingBlanks, true);
+
+    // Check if we have at least 3 possible words after the drop
+    const possibleWordsCount = calculatePossibleWordsStatic(gridAfterDrop, blanksAfterDrop);
+
+    if (possibleWordsCount >= 3) {
+      return { grid: gridAfterDrop, blanks: blanksAfterDrop };
+    }
+
+    attempts++;
+  }
+
+  // Fallback: if we can't find a good setup, just return a basic grid
+  const fallbackGrid = createGrid();
+  return { grid: fallbackGrid, blanks: Array(BLANK_COUNT).fill(null) };
+};
+
+function App() {
+  // Use lazy initialization to get both grid and blanks with one random letter dropped
+  const [initialState] = useState(() => initializeGame());
+  const [grid, setGrid] = useState(initialState.grid);
+  const [blanks, setBlanks] = useState(initialState.blanks);
   const [rowDeleteCount, setRowDeleteCount] = useState(0);
   const [spinCount, setSpinCount] = useState(0);
   const [spinsRemaining, setSpinsRemaining] = useState(5);
@@ -72,6 +207,7 @@ function App() {
   const [completedWord, setCompletedWord] = useState('');
   const [possibleWordsCount, setPossibleWordsCount] = useState(0);
   const [possibleWordsList, setPossibleWordsList] = useState([]);
+  const [showPossibleWordsModal, setShowPossibleWordsModal] = useState(false);
 
   // Calculate how many valid words are possible
   const calculatePossibleWords = (currentGrid, currentBlanks) => {
@@ -271,16 +407,10 @@ function App() {
 
   // Play again - restart the game
   const playAgain = () => {
-    let newGrid = createGrid();
-    let attempts = 0;
-    while (!checkGridHasWordsStatic(newGrid) && attempts < 100) {
-      newGrid = createGrid();
-      attempts++;
-    }
-    console.log(`Generated valid grid in ${attempts + 1} attempts`);
+    const newGameState = initializeGame();
 
-    setGrid(newGrid);
-    setBlanks(Array(BLANK_COUNT).fill(null));
+    setGrid(newGameState.grid);
+    setBlanks(newGameState.blanks);
     setRowDeleteCount(0);
     setSpinCount(0);
     setSpinsRemaining(5);
@@ -365,18 +495,12 @@ function App() {
 
         {!gameOver && (
           <div className="possible-words-section">
-            <div className="possible-words-count">
+            <button
+              className="possible-words-count"
+              onClick={() => setShowPossibleWordsModal(true)}
+            >
               {possibleWordsCount} possible {possibleWordsCount === 1 ? 'word' : 'words'}
-            </div>
-            {possibleWordsCount > 0 && possibleWordsCount < 10 && (
-              <div className="possible-words-list">
-                {possibleWordsList.map((word, index) => (
-                  <span key={index} className="possible-word">
-                    {word.toUpperCase()}
-                  </span>
-                ))}
-              </div>
-            )}
+            </button>
           </div>
         )}
 
@@ -409,6 +533,32 @@ function App() {
           </div>
         )}
       </div>
+
+      {showPossibleWordsModal && (
+        <div className="modal-overlay" onClick={() => setShowPossibleWordsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Possible Words ({possibleWordsCount})</h2>
+              <button className="modal-close" onClick={() => setShowPossibleWordsModal(false)}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              {possibleWordsList.length > 0 ? (
+                <div className="modal-words-grid">
+                  {possibleWordsList.map((word, index) => (
+                    <div key={index} className="modal-word">
+                      {word.toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-words-message">No possible words available</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
