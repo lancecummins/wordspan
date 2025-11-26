@@ -19,16 +19,54 @@ const createGrid = () => {
   );
 };
 
+// Static helper to check if grid has words (used during initialization)
+const checkGridHasWordsStatic = (gridToCheck) => {
+  const letterCounts = {};
+  for (let row of gridToCheck) {
+    for (let letter of row) {
+      if (letter) {
+        const lowerLetter = letter.toLowerCase();
+        letterCounts[lowerLetter] = (letterCounts[lowerLetter] || 0) + 1;
+      }
+    }
+  }
+
+  const canFormWord = (word) => {
+    const wordLetters = {};
+    for (let char of word) {
+      wordLetters[char] = (wordLetters[char] || 0) + 1;
+    }
+    for (let char in wordLetters) {
+      if (!letterCounts[char] || letterCounts[char] < wordLetters[char]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  for (let word of VALID_WORDS) {
+    if (canFormWord(word)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 function App() {
-  const [gameMode, setGameMode] = useState(null); // null, 'survival', 'challenge'
-  const [grid, setGrid] = useState(createGrid());
+  const [grid, setGrid] = useState(() => {
+    let newGrid = createGrid();
+    let attempts = 0;
+    while (!checkGridHasWordsStatic(newGrid) && attempts < 100) {
+      newGrid = createGrid();
+      attempts++;
+    }
+    return newGrid;
+  });
   const [blanks, setBlanks] = useState(Array(BLANK_COUNT).fill(null));
   const [rowDeleteCount, setRowDeleteCount] = useState(0);
   const [spinCount, setSpinCount] = useState(0);
   const [spinsRemaining, setSpinsRemaining] = useState(5);
   const [deletesRemaining, setDeletesRemaining] = useState(3);
-  const [score, setScore] = useState(0);
-  const [timer, setTimer] = useState(60); // 60 seconds for survival mode
   const [gameOver, setGameOver] = useState(false);
   const [message, setMessage] = useState('');
   const [completedWord, setCompletedWord] = useState('');
@@ -112,7 +150,7 @@ function App() {
 
   // Update possible words count when grid or actions change
   useEffect(() => {
-    if (gameMode === 'challenge' && !gameOver) {
+    if (!gameOver) {
       const result = calculatePossibleWords(grid, blanks);
       setPossibleWordsCount(result.count);
       setPossibleWordsList(result.words);
@@ -123,24 +161,8 @@ function App() {
         setMessage('There are no words possible. Game over');
       }
     }
-  }, [grid, blanks, spinsRemaining, deletesRemaining, gameMode, gameOver]);
+  }, [grid, blanks, spinsRemaining, deletesRemaining, gameOver]);
 
-  // Timer for survival mode
-  useEffect(() => {
-    if (gameMode === 'survival' && timer > 0 && !gameOver) {
-      const interval = setInterval(() => {
-        setTimer(prev => {
-          if (prev <= 1) {
-            setGameOver(true);
-            setMessage('Time\'s up!');
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [gameMode, timer, gameOver]);
 
   // Handle letter drop from bottom row
   const handleLetterClick = (colIndex) => {
@@ -174,25 +196,17 @@ function App() {
     }
   };
 
-  // Check if the word is valid (placeholder - we'll add dictionary later)
+  // Check if the word is valid
   const checkWord = async (word) => {
     const wordString = word.join('').toLowerCase();
 
-    // Simple validation for now - check if it's 5 letters
-    // TODO: Add real dictionary validation
     try {
       const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${wordString}`);
       const isValid = response.ok;
 
       if (isValid) {
-        if (gameMode === 'survival') {
-          setMessage(`Valid word: ${wordString.toUpperCase()}!`);
-          setScore(prev => prev + 1);
-          setBlanks(Array(BLANK_COUNT).fill(null));
-        } else if (gameMode === 'challenge') {
-          setCompletedWord(wordString.toUpperCase());
-          setGameOver(true);
-        }
+        setCompletedWord(wordString.toUpperCase());
+        setGameOver(true);
       } else {
         setMessage(`"${wordString.toUpperCase()}" is not a valid word. Try again!`);
         setBlanks(Array(BLANK_COUNT).fill(null));
@@ -255,61 +269,15 @@ function App() {
     setSpinsRemaining(prev => prev - 1);
   };
 
-  // Helper function to check if a grid has valid words (used during grid generation)
-  const checkGridHasWords = (gridToCheck) => {
-    // Use empty blanks for initial validation
-    const emptyBlanks = Array(BLANK_COUNT).fill(null);
-
-    // Collect all letters from the grid
-    const letterCounts = {};
-    for (let row of gridToCheck) {
-      for (let letter of row) {
-        if (letter) {
-          const lowerLetter = letter.toLowerCase();
-          letterCounts[lowerLetter] = (letterCounts[lowerLetter] || 0) + 1;
-        }
-      }
-    }
-
-    // Helper function to check if a word can be formed with available letters
-    const canFormWord = (word) => {
-      const wordLetters = {};
-      for (let char of word) {
-        wordLetters[char] = (wordLetters[char] || 0) + 1;
-      }
-
-      for (let char in wordLetters) {
-        if (!letterCounts[char] || letterCounts[char] < wordLetters[char]) {
-          return false;
-        }
-      }
-      return true;
-    };
-
-    // Check if at least one valid word can be formed
-    for (let word of VALID_WORDS) {
-      if (canFormWord(word)) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  // Start game
-  const startGame = (mode) => {
-    setGameMode(mode);
-
-    // For challenge mode, keep generating grids until we find one with valid words
+  // Play again - restart the game
+  const playAgain = () => {
     let newGrid = createGrid();
-    if (mode === 'challenge') {
-      let attempts = 0;
-      while (!checkGridHasWords(newGrid) && attempts < 100) {
-        newGrid = createGrid();
-        attempts++;
-      }
-      console.log(`Generated valid grid in ${attempts + 1} attempts`);
+    let attempts = 0;
+    while (!checkGridHasWordsStatic(newGrid) && attempts < 100) {
+      newGrid = createGrid();
+      attempts++;
     }
+    console.log(`Generated valid grid in ${attempts + 1} attempts`);
 
     setGrid(newGrid);
     setBlanks(Array(BLANK_COUNT).fill(null));
@@ -317,50 +285,10 @@ function App() {
     setSpinCount(0);
     setSpinsRemaining(5);
     setDeletesRemaining(3);
-    setScore(0);
-    setTimer(60);
     setGameOver(false);
     setMessage('');
     setCompletedWord('');
   };
-
-  // Reset game
-  const resetGame = () => {
-    setGameMode(null);
-    setGrid(createGrid());
-    setBlanks(Array(BLANK_COUNT).fill(null));
-    setRowDeleteCount(0);
-    setSpinCount(0);
-    setSpinsRemaining(5);
-    setDeletesRemaining(5);
-    setScore(0);
-    setTimer(60);
-    setGameOver(false);
-    setMessage('');
-    setCompletedWord('');
-  };
-
-  // Mode selection screen
-  if (!gameMode) {
-    return (
-      <div className="app">
-        <div className="mode-selection">
-          <h1>WordSpan</h1>
-          <p>Choose a game mode:</p>
-          <div className="mode-buttons">
-            <button className="mode-btn" onClick={() => startGame('survival')}>
-              <h2>Survival Mode</h2>
-              <p>Spell as many words as possible before time runs out</p>
-            </button>
-            <button className="mode-btn" onClick={() => startGame('challenge')}>
-              <h2>Challenge Mode</h2>
-              <p>Spell a word with the fewest row deletes</p>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="app">
@@ -368,13 +296,7 @@ function App() {
         <div className="header">
           <h1>WordSpan</h1>
           <div className="stats">
-            {gameMode === 'survival' && (
-              <>
-                <div className="stat">Time: {timer}s</div>
-                <div className="stat">Score: {score}</div>
-              </>
-            )}
-            <button className="back-btn" onClick={resetGame}>Menu</button>
+            <button className="back-btn" onClick={playAgain}>Play Again</button>
           </div>
         </div>
 
@@ -460,42 +382,30 @@ function App() {
 
         {gameOver && (
           <div className="game-over">
-            {gameMode === 'survival' && (
+            {completedWord ? (
               <>
-                <h2>Time's Up!</h2>
-                <p>Final Score: {score} words</p>
-                <button onClick={resetGame}>Back to Menu</button>
+                <h2 className="celebration">Congratulations!</h2>
+                <div className="completed-word">{completedWord}</div>
+                <div className="stats-summary">
+                  <div className="stat-item">
+                    <span className="stat-label">Row Deletes:</span>
+                    <span className="stat-value">{rowDeleteCount}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Spins:</span>
+                    <span className="stat-value">{spinCount}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2>Game Over</h2>
+                <p>{message}</p>
               </>
             )}
-            {gameMode === 'challenge' && (
-              <>
-                {completedWord ? (
-                  <>
-                    <h2 className="celebration">Congratulations!</h2>
-                    <div className="completed-word">{completedWord}</div>
-                    <div className="stats-summary">
-                      <div className="stat-item">
-                        <span className="stat-label">Row Deletes:</span>
-                        <span className="stat-value">{rowDeleteCount}</span>
-                      </div>
-                      <div className="stat-item">
-                        <span className="stat-label">Spins:</span>
-                        <span className="stat-value">{spinCount}</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h2>Game Over</h2>
-                    <p>{message}</p>
-                  </>
-                )}
-                <button onClick={() => startGame('challenge')} className="play-again-btn">
-                  Play Again?
-                </button>
-                <button onClick={resetGame} className="menu-btn">Back to Menu</button>
-              </>
-            )}
+            <button onClick={playAgain} className="play-again-btn">
+              Play Again?
+            </button>
           </div>
         )}
       </div>
