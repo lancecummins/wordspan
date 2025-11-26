@@ -363,7 +363,7 @@ function App() {
           ))}
         </div>
 
-        {gameMode === 'challenge' && !gameOver && (
+        {!gameOver && (
           <div className="possible-words-section">
             <div className="possible-words-count">
               {possibleWordsCount} possible {possibleWordsCount === 1 ? 'word' : 'words'}
